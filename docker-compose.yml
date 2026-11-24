@@ -1,0 +1,54 @@
+services:
+  postgres:
+    image: postgres:16
+    environment: 
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: shop
+    command: >
+      postgres
+      -c shared_buffers=512MB
+      -c max_wal_size=4GB
+      -c fsync=off
+      -c synchronous_commit=off
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d shop"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  
+  search:
+    build: ./search-rs
+    environment:
+      PORT: "8082"
+
+  catalog:
+    build: ./catalog
+    environment:
+      PORT: "8081"
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/shop
+      SEARCH_URL: http://search:8082
+      SEED_COUNT: ${SEED_COUNT:-100000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports: 
+      - "8081:8081"
+
+  gateway:
+    build: ./gateway
+    environment:
+      PORT: "8080"
+      CATALOG_URL: http://catalog:8081
+      SEARCH_URL: http://search:8082
+    depends_on:
+      - catalog
+    ports:
+      - "8080:8080"
+  
+volumes:
+  pgdata:
+  
